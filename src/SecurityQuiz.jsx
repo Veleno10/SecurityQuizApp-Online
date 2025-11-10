@@ -4955,7 +4955,7 @@ function SecurityQuiz() {
             { username: "TestUser", password: "password", expiresAt: null, disabled: false, archive: [] }, // Scadenza rimossa per semplicità nel seed
         ];
         for (const userRec of initialUsers) {
-            await setDoc(doc(db, 'users', userRec.username), userRec); // Usa username come ID documento
+            await setDoc(doc(db, 'users', String(userRec.username)), userRec); // Usa username come ID documento
         }
     }
 
@@ -4963,7 +4963,7 @@ function SecurityQuiz() {
     const questions = await readCollection('questions');
     if (questions.length === 0) {
         for (const question of INITIAL_QUESTIONS) {
-            await setDoc(doc(db, 'questions', question.id), question);
+            await setDoc(doc(db, 'questions', String(question.id)), question);
         }
     }
     console.log("Dati Firebase inizializzati.");
@@ -5013,7 +5013,7 @@ function SecurityQuiz() {
 
     if (currentUserDoc) {
         const updatedArchive = [...(currentUserDoc.archive || []), historyRecord];
-        const userDocRef = doc(db, 'users', user.username);
+        const userDocRef = doc(db, 'users', String(user.username));
         await updateDoc(userDocRef, { archive: updatedArchive });
         
         setUserHistory(updatedArchive); // Aggiorna stato locale
@@ -5275,7 +5275,7 @@ const MenuScreen = () => (
             setAdminMessage("Non puoi eliminare l'account Admin principale.");
             return;
         }
-        await deleteDoc(doc(db, 'users', username)); // Elimina da Firebase
+        await deleteDoc(doc(db, 'users', String(username))); // Elimina da Firebase
         // Aggiorna lo stato locale globale
         setAllUsers(prevUsers => prevUsers.filter(u => u.username !== username));
         setAdminMessage(`Utente ${username} eliminato.`);
@@ -5289,7 +5289,7 @@ const MenuScreen = () => (
         const expiryAtISO = newExpiryDate ? new Date(newExpiryDate).toISOString() : null;
         const newUserRec = { username: newUsername, password: newPassword, expiresAt: expiryAtISO, disabled: false, archive: [] };
 
-        await setDoc(doc(db, 'users', newUsername), newUserRec); // Aggiungi a Firebase
+        await setDoc(doc(db, 'users', String(newUsername)), newUserRec); // Aggiungi a Firebase
         // Aggiorna lo stato locale globale
         setAllUsers(prevUsers => [...prevUsers, newUserRec]);
         
@@ -5301,7 +5301,7 @@ const MenuScreen = () => (
     
     const handleExpiryDateChange = async (username, newDateString) => {
         const newExpiry = newDateString ? new Date(newDateString).toISOString() : null;
-        const userDocRef = doc(db, 'users', username);
+        const userDocRef = doc(db, 'users', String(username));
         await updateDoc(userDocRef, { expiresAt: newExpiry }); // Aggiorna su Firebase
 
         // Aggiorna lo stato locale globale
@@ -5311,7 +5311,7 @@ const MenuScreen = () => (
 
     const clearUserArchive = async (username) => {
         if (window.confirm(`Sei sicuro di voler cancellare l'intero archivio test per ${username}? Questa azione è irreversibile.`)) {
-            const userDocRef = doc(db, 'users', username);
+            const userDocRef = doc(db, 'users', String(username));
             await updateDoc(userDocRef, { archive: [] }); // Svuota archivio su Firebase
 
             // Aggiorna lo stato locale globale
@@ -5472,6 +5472,43 @@ const MenuScreen = () => (
                 />
             )}
         </div>
+    );
+  };
+
+const QuizScreen = () => {
+    const q = quizQuestions[currentIndex];
+    if (!q) return null;
+
+    const isEndingSoon = timeLeft <= 60;
+
+    return (
+      <div className="min-h-screen p-6 relative">
+        <Header />
+        <div className="max-w-4xl mx-auto bg-white p-6 rounded-2xl shadow flex flex-col md:flex-row gap-6">
+          <div className="w-full md:w-2/3">
+            <h3 className="text-lg font-semibold mb-3">Domanda {currentIndex + 1} di {quizQuestions.length}</h3>
+            <div className="p-4 rounded-xl border bg-gray-50 mb-4">
+              <div className="mb-4 text-center font-medium">{q.text}</div>
+              {q.options.map((opt, idx) => (
+                <label key={idx} className={`block p-3 rounded-xl border mb-2 ${answers[q.id] === idx ? 'bg-indigo-50 border-indigo-200' : 'bg-white'}`}>
+                  <input type="radio" name={`q_${q.id}`} checked={answers[q.id] === idx} onChange={() => chooseAnswer(q.id, idx)} /> <span className="ml-2">{opt}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex flex-wrap justify-between items-center gap-2 mt-4">
+              <button onClick={() => goToQuestion(currentIndex - 1)} disabled={currentIndex === 0} className="px-3 py-2 rounded-lg border">Precedente</button>
+              <div className={`text-sm font-semibold ${isEndingSoon ? 'text-red-600 animate-pulse' : 'text-indigo-700'}`}>⏱️ Tempo rimanente: {formatTime(timeLeft)}</div>
+              <button onClick={() => goToQuestion(currentIndex + 1)} disabled={currentIndex === quizQuestions.length - 1} className="px-3 py-2 rounded-lg border">Successiva</button>
+              <button type="button" onClick={submitQuiz} className="px-3 py-2 rounded-lg bg-indigo-50 border">Concludi Test</button>
+            </div>
+          </div>
+          {q.image && (
+            <div className="w-full md:w-1/3 flex items-center justify-center">
+              <img src={q.image} alt="Immagine di supporto" className="rounded-xl border object-contain w-full h-auto" />
+            </div>
+          )}
+        </div>
+      </div>
     );
   };
 

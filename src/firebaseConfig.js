@@ -8,6 +8,7 @@ import { getFirestore } from "firebase/firestore";
 const firebaseConfig = {
   apiKey: "AIzaSyCOSRU9RpimU91QBcHU_DD7J8MYa3Na73g",
   authDomain: "securityquizapp.firebaseapp.com",
+  databaseURL: "https://securityquizapp.firebaseio.com",
   projectId: "securityquizapp",
   storageBucket: "securityquizapp.firebasestorage.app",
   messagingSenderId: "245494246657",
