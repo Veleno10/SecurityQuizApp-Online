@@ -5424,7 +5424,7 @@ const addUser = async (e) => {
         return (
             <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
                 <div className="bg-white p-8 rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-                    <h3 className="text-2xl font-semibold mb-4">Archivio Test di {userRec.username}</h3>
+                    <h3 className="text-2xl font-semibold mb-4">Archivio Test di {userRec.firstName} {userRec.lastName}</h3>
                     <h4 className="font-semibold mt-6 mb-2">Riepilogo per Categoria:</h4>
                     <div className="space-y-2 mb-6">
                         {Object.entries(statsByCategory).map(([category, stats]) => (
