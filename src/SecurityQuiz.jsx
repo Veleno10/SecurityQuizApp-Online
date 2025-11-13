@@ -1043,7 +1043,7 @@ function SecurityQuiz() {
       id: 129,
       category: "Esercitazione Categoria A1",
       text: "Come deve essere composta una postazione di controllo per i passeggeri ed il loro bagaglio a mano?",
-      options: ["Deve essere composta da un portale W.T.M.D., un apparato RX e un apparato E.T.D.", "eve essere presente un apparato W.T.M.D., un apparato RX, un apparato L.E.D. e un apparato E.T.D.", "Deve essere in funzione del numero dei passeggeri annui"],
+      options: ["Deve essere composta da un portale W.T.M.D., un apparato RX e un apparato E.T.D.", "Deve essere presente un apparato W.T.M.D., un apparato RX, un apparato L.E.D. e un apparato E.T.D.", "Deve essere in funzione del numero dei passeggeri annui"],
       answer: 1,
       image: "",
     },
@@ -4523,7 +4523,7 @@ function SecurityQuiz() {
       id: 1068,
       category: "Esercitazione Teoria Generale",
       text: "In quale grande capitale il 24 gennaio 2011 nell'area ritiro bagagli dell'aeroporto venne fatto esplodere un ordigno che causò la morte di 37 persone ed il ferimento di oltre 180?",
-      options: ["Bruxelles, aeroporto National", "Londra, aeroporto di Gatwick", "Mosca, aeroproto di Domedovo"],
+      options: ["Bruxelles, aeroporto National", "Londra, aeroporto di Gatwick", "Mosca, aeroporto di Domedovo"],
       answer: 2,
       image: "",
     },
@@ -4951,8 +4951,8 @@ function SecurityQuiz() {
     const users = await readCollection('users');
     if (users.length === 0) {
         const initialUsers = [
-            { username: "Admin", password: "Admin", expiresAt: null, disabled: false, archive: [] },
-            { username: "TestUser", password: "password", expiresAt: null, disabled: false, archive: [] }, // Scadenza rimossa per semplicità nel seed
+            { username: "Admin", password: "Admin", expiresAt: null, disabled: false, archive: [], firstName: "Super", lastName: "Admin" },
+            { username: "TestUser", password: "password", expiresAt: null, disabled: false, archive: [], firstName: "Utente", lastName: "Test" }, // Scadenza rimossa per semplicità nel seed
         ];
         for (const userRec of initialUsers) {
             await setDoc(doc(db, 'users', String(userRec.username)), userRec); // Usa username come ID documento
@@ -5044,7 +5044,7 @@ function SecurityQuiz() {
     if (userRec.disabled) return setMessage("Account disabilitato.");
     if (isExpired(userRec.expiresAt)) return setMessage(`Account scaduto il ${formatDate(userRec.expiresAt)}.`);
     
-    setUser({ username: userRec.username });
+    setUser({ username: userRec.username, firstName: userRec.firstName, lastName: userRec.lastName});
     setAdminMode(userRec.username === "Admin");
     setUserHistory(userRec.archive || []); // Carica l'archivio
 
@@ -5066,6 +5066,45 @@ function SecurityQuiz() {
     setAdminMode(false);
     setUserHistory([]);
   };
+
+  // --- Inizio del NUOVO codice per il controllo attivo ---
+ useEffect(() => {
+    let intervalId = null;
+
+    const checkUserStatus = async () => {
+      if (user && user.username) {
+        // Legge la lista utenti aggiornata
+        const usersList = await readCollection('users');
+        // Trova i dettagli dell'utente loggato
+        const currentUserDoc = usersList.find(u => u.username === user.username);
+
+        // Se l'utente esiste e risulta disabilitato nel DB
+        if (currentUserDoc && currentUserDoc.disabled) {
+          console.log("Account disattivato, esecuzione logout forzato.");
+          alert("Il tuo account è stato disattivato. Verrai disconnesso.");
+          logout(); // Chiama la funzione di logout esistente
+        }
+      }
+    };
+
+    // Avvia il controllo periodico solo se un utente è loggato
+    if (user) {
+        // Esegue il controllo subito al login, poi ogni 60 secondi
+        checkUserStatus(); 
+        intervalId = setInterval(checkUserStatus, 60000); // 60000ms = 1 minuto
+    }
+
+    // Funzione di pulizia: ferma l'intervallo quando il componente viene smontato o l'utente fa logout
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+    
+  }, [user, readCollection, logout]); // Dipendenze: riesegui quando user, readCollection o logout cambiano
+  // --- Fine del NUOVO codice per il controllo attivo ---
+
+
 
   const startQuiz = async (category) => {
     setSelectedCategory(category);
@@ -5098,7 +5137,7 @@ function SecurityQuiz() {
 
 const Header = () => (
     <div className="absolute top-4 right-4 flex items-center gap-3">
-      {user && <span className="text-sm text-gray-700 bg-gray-100 px-3 py-1 rounded-lg">Utente: {user.username}</span>}
+      {user && <span className="text-sm text-gray-700 bg-gray-100 px-3 py-1 rounded-lg">Utente: {user.firstName} {user.lastName}</span>}
       
       {adminMode && stage !== "admin" && (
         <button onClick={goToAdmin} className="px-3 py-2 text-sm text-white bg-blue-500 rounded-lg hover:bg-blue-600">
@@ -5266,6 +5305,8 @@ const MenuScreen = () => (
     const [newUsername, setNewUsername] = useState("");
     const [newPassword, setNewPassword] = useState("");
     const [newExpiryDate, setNewExpiryDate] = useState("");
+    const [newFirstName, setNewFirstName] = useState("");
+    const [newLastName, setNewLastName] = useState("");
     const [adminMessage, setAdminMessage] = useState("");
     const [viewingHistoryOf, setViewingHistoryOf] = useState(null); 
 
@@ -5281,23 +5322,39 @@ const MenuScreen = () => (
         setAdminMessage(`Utente ${username} eliminato.`);
     };
 
-    const addUser = async (e) => {
-        e.preventDefault();
-        if (!newUsername || !newPassword) return setAdminMessage("Inserisci username e password.");
-        if (allUsers.some(u => u.username === newUsername)) return setAdminMessage("Username già esistente.");
+const addUser = async (e) => {
+    e.preventDefault();
+    // 1. Aggiungiamo controlli di validazione per i nuovi campi
+    if (!newUsername || !newPassword || !newFirstName || !newLastName) {
+        return setAdminMessage("Inserisci username, password, nome e cognome.");
+    }
+    if (allUsers.some(u => u.username === newUsername)) return setAdminMessage("Username già esistente.");
 
-        const expiryAtISO = newExpiryDate ? new Date(newExpiryDate).toISOString() : null;
-        const newUserRec = { username: newUsername, password: newPassword, expiresAt: expiryAtISO, disabled: false, archive: [] };
-
-        await setDoc(doc(db, 'users', String(newUsername)), newUserRec); // Aggiungi a Firebase
-        // Aggiorna lo stato locale globale
-        setAllUsers(prevUsers => [...prevUsers, newUserRec]);
-        
-        setNewUsername("");
-        setNewPassword("");
-        setNewExpiryDate("");
-        setAdminMessage(`Utente ${newUsername} aggiunto.`);
+    const expiryAtISO = newExpiryDate ? new Date(newExpiryDate).toISOString() : null;
+    
+    // 2. Includi firstName e lastName nel nuovo record utente
+    const newUserRec = { 
+        username: newUsername, 
+        password: newPassword, 
+        expiresAt: expiryAtISO, 
+        disabled: false, 
+        archive: [],
+        firstName: newFirstName, // <--- Nuovo campo
+        lastName: newLastName,   // <--- Nuovo campo
     };
+
+    await setDoc(doc(db, 'users', String(newUsername)), newUserRec); // Aggiungi a Firebase
+    // Aggiorna lo stato locale globale
+    setAllUsers(prevUsers => [...prevUsers, newUserRec]);
+    
+    // 3. Resetta i campi del form dopo l'invio, inclusi i nuovi
+    setNewUsername("");
+    setNewPassword("");
+    setNewExpiryDate("");
+    setNewFirstName(""); // <--- Resetta
+    setNewLastName("");  // <--- Resetta
+    setAdminMessage(`Utente ${newUsername} aggiunto.`);
+};
     
     const handleExpiryDateChange = async (username, newDateString) => {
         const newExpiry = newDateString ? new Date(newDateString).toISOString() : null;
@@ -5408,6 +5465,8 @@ const MenuScreen = () => (
                 <div className="bg-white p-6 rounded-xl shadow mb-8">
                     <h3 className="text-xl mb-4">Aggiungi Nuovo Utente</h3>
                     <form onSubmit={addUser} className="flex flex-wrap gap-4">
+                        <input type="text" placeholder="Nome" value={newFirstName} onChange={(e) => setNewFirstName(e.target.value)} className="p-3 border rounded-lg flex-grow w-full md:w-auto" required />
+                       <input type="text" placeholder="Cognome" value={newLastName} onChange={(e) => setNewLastName(e.target.value)} className="p-3 border rounded-lg flex-grow w-full md:w-auto" required />
                         <input type="text" placeholder="Username" value={newUsername} onChange={(e) => setNewUsername(e.target.value)} className="p-3 border rounded-lg flex-grow w-full md:w-auto" />
                         <input type="password" placeholder="Password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="p-3 border rounded-lg flex-grow w-full md:w-auto" />
                         <input type="date" value={newExpiryDate} onChange={(e) => setNewExpiryDate(e.target.value)} className="p-3 border rounded-lg flex-grow w-full md:w-auto" title="Data di scadenza (lascia vuoto per illimitato)" />
@@ -5422,7 +5481,7 @@ const MenuScreen = () => (
                         {allUsers.map((u) => ( // Usa allUsers qui
                             <li key={u.username} className="flex flex-wrap items-center justify-between p-3 border rounded-lg bg-gray-50">
                                 <div className="flex-grow mb-2 md:mb-0">
-                                    <span className="font-medium">{u.username}</span>
+                                    <span className="font-medium">{u.firstName} {u.lastName}</span>
                                     <p className={`text-xs mt-0.5 ${isExpired(u.expiresAt) ? 'text-red-500' : 'text-gray-500'}`}>
                                         Stato: {isExpired(u.expiresAt) ? 'Scaduto' : 'Attivo'}
                                     </p>
